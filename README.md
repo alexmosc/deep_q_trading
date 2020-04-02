@@ -3,12 +3,12 @@ R language OOP implementation of deep Q learning to simulate stock trading
 
 Packages you need to install before running the script:
 
-R6
-data.table
-magrittr
-keras
-quantmod
-TTR
+R6,
+data.table,
+magrittr,
+keras,
+quantmod,
+TTR.
 
 with the command install.packages('TTR', dependencies = T).
 

@@ -8,6 +8,7 @@ Packages you need to install before running the script:
 R6,
 data.table,
 magrittr,
+ggplot2,
 keras,
 quantmod,
 TTR.

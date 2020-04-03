@@ -3,7 +3,7 @@
 
 rm(list = ls()); gc()
 
-setwd('C:/R_study/reinforcement/rl_classes')
+setwd('C:/R_study/reinforcement/rl_classes') # set your working directory
 
 
 ## Classes

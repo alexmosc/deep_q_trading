@@ -260,5 +260,19 @@ NN <- R6::R6Class(
 			
 		}
 		
+		, save = function()
+		{
+			
+			## save NN model
+			
+			save_model_hdf5(
+				object = self$nn
+				, filepath = 'primary_nn_model.h5'
+				, overwrite = TRUE
+				, include_optimizer = TRUE
+			)
+			
+		}
+		
 	)
 )

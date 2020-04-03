@@ -312,6 +312,8 @@ Train = R6::R6Class(
 		, stats_train = function()
 		{
 			
+			require(TTR)
+			
 			par(mfrow = c(3, 2), oma=c(0,0,2,0))
 			
 			plot(
@@ -793,8 +795,6 @@ Train = R6::R6Class(
 				
 				
 				## Analyze results
-				
-				x <<- private$returns_data
 				
 				self$analyze()
 				

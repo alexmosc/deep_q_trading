@@ -13,11 +13,11 @@ keras,
 quantmod,
 TTR.
 
-with the command install.packages('TTR', dependencies = T).
+with the command like the following: install.packages('TTR', dependencies = T).
 
 Installing keras for R is a little different, but should typically be easy; refer to a manual: https://keras.rstudio.com/.
 
-After you are done with the packages, run main.R script. Default parameters will use a generated signal timeseries and training will last for 5000 iterations.
+This is it. After you are done with the packages, run main.R script. Default parameters will use a generated signal timeseries and training will last for 5000 iterations.
 
 If you wish to change parameters or load real stock data, you have to tune the main.R script.
 

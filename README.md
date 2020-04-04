@@ -22,3 +22,5 @@ This is it. After you are done with the packages, run main.R script. Default par
 If you wish to change parameters or load real stock data, you have to tune the main.R script.
 
 It is best to run the thing in RStudio for full control over the training. You will also see charts popping up.
+
+Please read a story with more details about this project at Medium:  https://medium.com/@alexeybnk/object-oriented-r-code-for-deep-q-stock-trading-90a8f73b2aac

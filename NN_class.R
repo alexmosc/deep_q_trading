@@ -272,6 +272,8 @@ NN <- R6::R6Class(
 				, include_optimizer = TRUE
 			)
 			
+			cat('########## neural network model was saved ##########', '\n')
+			
 		}
 		
 	)

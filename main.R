@@ -14,6 +14,8 @@ source('DATA_class.R')
 
 source('RB_class.R')
 
+source('LOGS_class.R')
+
 source('TRAIN_class.R')
 
 
@@ -35,9 +37,9 @@ Dat <- Data$new()
 
 Dat$synthetic_signal(
 	stepsize = 0.1
-	, noise_sd = 0.0
+	, noise_sd = 0.1
 	, noise_sd2 = 0.0
-	, n = 20000
+	, n = 50000
 	)
 
 Dat$make_features(max_lag_power = 6)
@@ -66,6 +68,11 @@ Rb <- RB$new(
 Rb$init_rb()
 
 
+## Logging
+
+Log <- Logs$new()
+
+
 ## Train
 
 Tr <- Train$new()
@@ -80,3 +87,8 @@ Tr$run(
 	, print_returns_every = 100
 	, magic_const = 1
 )
+
+
+## Save NN
+
+Nn$save()

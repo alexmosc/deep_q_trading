@@ -7,11 +7,8 @@ Train = R6::R6Class(
 		old_pos_price = NULL
 		, new_pos_price = NULL
 		, old_pos = c(0, 0, 1)
-		, q_val_tracker = NULL
-		, critic_loss_tracker = numeric()
-		, returns_data = NULL
+		, Log = NULL
 		, deal_count = 0L
-		, reward_buffer = numeric()
 		, features = NULL
 		, Rb = NULL
 		, Nn1 = NULL
@@ -24,15 +21,34 @@ Train = R6::R6Class(
 		, R = NULL
 		, SAR = NULL
 		, iter = NULL
-	)
-	, public = list(
 		
-		act = function()
+		, act = function()
 		{
 			
 			require(keras)
 			require(magrittr)
 			require(data.table)
+			
+			
+			## randomly load one of two models to generate max q action
+			
+			which_model <- runif(1) > 0.5
+			
+			if(
+				which_model
+			)
+			{
+				
+				acting_nn <- private$Nn1$nn
+				
+			} else {
+				
+				acting_nn <- private$Nn2$nn
+				
+			}
+			
+			
+			## Reshape data
 			
 			nn_dat <- 
 				private$Rb$rb[
@@ -46,6 +62,7 @@ Train = R6::R6Class(
 					), '_next')
 					, with = F
 					]
+			
 			
 			## reshape inputs
 			
@@ -64,9 +81,9 @@ Train = R6::R6Class(
 			## predict with NN
 			
 			predict(
-				private$Nn1$nn
+				acting_nn
 				, train_x
-				) %>%
+			) %>%
 				as.numeric
 			
 		}
@@ -124,7 +141,7 @@ Train = R6::R6Class(
 						, 'hold'
 						, 'floating'
 					)
-				, '_next'
+					, '_next'
 				)
 			
 			state_names_length <- length(state_names)
@@ -162,7 +179,7 @@ Train = R6::R6Class(
 					, prob = tail(
 						private$Rb$rb_priority()
 						, private$buffer_size - private$lstm_seq_length + 1
-						)
+					)
 				)
 			
 			
@@ -172,10 +189,10 @@ Train = R6::R6Class(
 				lapply(
 					sample_indexes
 					, function(x)
-						{
-							
-							private$Rb$rb[(x - private$lstm_seq_length + 1):x]
-							
+					{
+						
+						private$Rb$rb[(x - private$lstm_seq_length + 1):x]
+						
 					}
 				) %>%
 				rbindlist
@@ -188,36 +205,36 @@ Train = R6::R6Class(
 					as.vector(t(as.matrix(batch[, state_names, with = F])))
 					, dim = c(length(sample_indexes), private$lstm_seq_length, state_names_length)
 					, order = "C"
-						    )
+				)
 			
 			next_critic_train_x <- 
 				array_reshape(
 					as.vector(t(as.matrix(batch[, next_state_names, with = F])))
 					, dim = c(length(sample_indexes), private$lstm_seq_length, state_names_length)
 					, order = "C"
-					)
+				)
 			
 			
 			## predict with NN
 			
 			q_values <- 
 				predict(
-				primary_nn$nn
-				, critic_train_x
-			)
+					primary_nn$nn
+					, critic_train_x
+				)
 			
 			next_q_values <- 
 				predict(
-				primary_nn$nn
-				, next_critic_train_x
-			)
+					primary_nn$nn
+					, next_critic_train_x
+				)
 			
 			which_next_max_q <- 
 				apply(
 					next_q_values
 					, 1
 					, which.max
-					)
+				)
 			
 			
 			## predict with NN
@@ -244,7 +261,7 @@ Train = R6::R6Class(
 				q_values
 				, dim = c(length(sample_indexes)
 						, 3L)
-				)
+			)
 			
 			# insert discounted target
 			
@@ -256,7 +273,7 @@ Train = R6::R6Class(
 					i
 					, c(1:3)[made_actions[i]==1]
 					] <- 
-						got_rewards[i] + discount_factor * next_q_values[i, which_next_max_q[i]]
+					got_rewards[i] + discount_factor * next_q_values[i, which_next_max_q[i]]
 			}
 			
 			critic_train <- keras::fit(
@@ -270,11 +287,11 @@ Train = R6::R6Class(
 				, lr = learn_rate
 			)
 			
-			private$critic_loss_tracker <- 
+			private$Log$critic_loss_tracker <- 
 				c(
-					private$critic_loss_tracker
+					private$Log$critic_loss_tracker
 					, critic_train$metrics$mean_squared_error[length(critic_train$metrics$mean_squared_error)]
-					)
+				)
 			
 			
 			## assign models to objects
@@ -301,8 +318,8 @@ Train = R6::R6Class(
 						critic_train_y - q_values
 						, 1
 						, sum
-						)
 					)
+				)
 			
 			
 			invisible(self)
@@ -317,52 +334,52 @@ Train = R6::R6Class(
 			par(mfrow = c(3, 2), oma=c(0,0,2,0))
 			
 			plot(
-				log(TTR::SMA(private$critic_loss_tracker, 100)[!is.na(TTR::SMA(private$critic_loss_tracker, 100))])
+				log(TTR::SMA(private$Log$critic_loss_tracker, 100)[!is.na(TTR::SMA(private$Log$critic_loss_tracker, 100))])
 				, type = 'l'
 				, main = '100-average critic loss logarithm'
 				, xlab = 'timestep'
 				, ylab = ''
 			)
 			
-			plot(private$returns_data[deal == 1, TTR::SMA(return, 100)][!is.na(private$returns_data[deal == 1, TTR::SMA(return, 100)])],
+			plot(private$Log$returns_data[deal == 1, TTR::SMA(return, 100)][!is.na(private$Log$returns_data[deal == 1, TTR::SMA(return, 100)])],
 				type = 'l',
 				main = '100-deal-average return plot'
 				, xlab = 'episode'
 				, ylab = ''
 			)
 			
-			plot(private$returns_data[deal == 1, TTR::runSum(return, cumulative = T)],
+			plot(private$Log$returns_data[deal == 1, TTR::runSum(return, cumulative = T)],
 				type = 'l',
 				main = 'cumulative return plot'
 				, xlab = 'episode'
 				, ylab = ''
 			)
 			
-			plot(tail(private$reward_buffer, 100),
+			plot(tail(private$Log$reward_buffer, 100),
 				type = 'l',
 				main = 'last 100 rewards'
 				, xlab = 'timestep'
 				, ylab = ''
 			)
 			
-			plot(private$q_val_tracker[(nrow(private$q_val_tracker) - 100):(nrow(private$q_val_tracker) - 1), V1]
+			plot(private$Log$q_val_tracker[(nrow(private$Log$q_val_tracker) - 100):(nrow(private$Log$q_val_tracker) - 1), V1]
 				, type = 'l'
 				, col = 'red'
 				, main = 'last 100 q values'
 				, xlab = 'timestep'
 				, ylab = ''
 				, ylim = c(
-					min(unlist(private$q_val_tracker[(nrow(private$q_val_tracker) - 99):nrow(private$q_val_tracker), .(V1, V2, V3)]))
-					, max(unlist(private$q_val_tracker[(nrow(private$q_val_tracker) - 99):nrow(private$q_val_tracker), .(V1, V2, V3)]))
+					min(unlist(private$Log$q_val_tracker[(nrow(private$Log$q_val_tracker) - 99):nrow(private$Log$q_val_tracker), .(V1, V2, V3)]))
+					, max(unlist(private$Log$q_val_tracker[(nrow(private$Log$q_val_tracker) - 99):nrow(private$Log$q_val_tracker), .(V1, V2, V3)]))
 				)
 			)
 			
-			lines(private$q_val_tracker[(nrow(private$q_val_tracker) - 100):(nrow(private$q_val_tracker) - 1), V2]
+			lines(private$Log$q_val_tracker[(nrow(private$Log$q_val_tracker) - 100):(nrow(private$Log$q_val_tracker) - 1), V2]
 				 , type = 'l'
 				 , col = 'black'
 			)
 			
-			lines(private$q_val_tracker[(nrow(private$q_val_tracker) - 100):(nrow(private$q_val_tracker) - 1), V3]
+			lines(private$Log$q_val_tracker[(nrow(private$Log$q_val_tracker) - 100):(nrow(private$Log$q_val_tracker) - 1), V3]
 				 , type = 'l'
 				 , col = 'green'
 			)
@@ -395,8 +412,8 @@ Train = R6::R6Class(
 			)
 			{
 				
-				private$returns_data <- rbind(
-					private$returns_data,
+				private$Log$returns_data <- rbind(
+					private$Log$returns_data,
 					data.table(
 						new_state = c('buy','sell','hold')[private$A == 1]
 						, old_state = c('buy','sell','hold')[private$old_pos == 1]
@@ -420,8 +437,8 @@ Train = R6::R6Class(
 			)
 			{
 				
-				private$returns_data <- rbind(
-					private$returns_data,
+				private$Log$returns_data <- rbind(
+					private$Log$returns_data,
 					data.table(
 						new_state = c('buy','sell','hold')[private$A == 1]
 						, old_state = c('buy','sell','hold')[private$old_pos == 1]
@@ -435,7 +452,7 @@ Train = R6::R6Class(
 				private$deal_count <- private$deal_count + 1L
 				
 			}
-
+			
 			
 			## opening trade from hold -----------------------
 			
@@ -445,8 +462,8 @@ Train = R6::R6Class(
 			)
 			{
 				
-				private$returns_data <- rbind(
-					private$returns_data,
+				private$Log$returns_data <- rbind(
+					private$Log$returns_data,
 					data.table(
 						new_state = c('buy','sell','hold')[private$A == 1]
 						, old_state = c('buy','sell','hold')[private$old_pos == 1]
@@ -465,8 +482,8 @@ Train = R6::R6Class(
 			else 
 			{
 				
-				private$returns_data <- rbind(
-					private$returns_data,
+				private$Log$returns_data <- rbind(
+					private$Log$returns_data,
 					data.table(
 						new_state = c('buy','sell','hold')[private$A == 1]
 						, old_state = c('buy','sell','hold')[private$old_pos == 1]
@@ -491,7 +508,7 @@ Train = R6::R6Class(
 			
 			require(ggplot2)
 			
-			train_tise_analyze <- copy(private$returns_data)
+			train_tise_analyze <- copy(private$Log$returns_data)
 			
 			train_tise_analyze[, round_index:= round(time_step / round_factor)]
 			
@@ -500,61 +517,61 @@ Train = R6::R6Class(
 			plo <- ggplot() +
 				facet_wrap(
 					~ round_index, ncol = 3, scales = 'free'
-					) +
+				) +
 				geom_line(
 					data = train_tise_analyze[
 						round_index_residual == 0 & round_index > 1
 						]
-						, aes(
-							x = time_step
-							, y = price
-							)
+					, aes(
+						x = time_step
+						, y = price
+					)
 					, size = 0.5
 					, color = 'blue'
 					, alpha = 1
-					) +
+				) +
 				geom_point(
 					data = train_tise_analyze[
 						round_index_residual == 0 & round_index > 1 & new_state == 'buy'
 						]
-						 , aes(
-						 	x = time_step
-						 	, y = price
-						 	)
+					, aes(
+						x = time_step
+						, y = price
+					)
 					, size = 2
 					, shape = 17
 					, color = 'green'
 					, fill = 'green'
 					, alpha = 0.75
-					) +
+				) +
 				geom_point(
 					data = train_tise_analyze[
 						round_index_residual == 0 & round_index > 1 & new_state == 'sell'
 						]
-						 , aes(
-						 	x = time_step
-						 	, y = price
-						 	)
-						 , size = 2
+					, aes(
+						x = time_step
+						, y = price
+					)
+					, size = 2
 					, shape = 25
 					, color = 'red'
 					, fill = 'red'
 					, alpha = 0.75
-						 ) +
+				) +
 				geom_point(
 					data = train_tise_analyze[
 						round_index_residual == 0 & round_index > 1 & new_state == 'hold'
 						]
-						 , aes(
-						 	x = time_step
-						 	, y = price
-						 	)
-						 , size = 2
+					, aes(
+						x = time_step
+						, y = price
+					)
+					, size = 2
 					, shape = 15
 					, color = 'grey'
 					, fill = 'grey'
 					, alpha = 0.75
-						 ) +
+				) +
 				theme_minimal()
 			
 			print(plo)
@@ -565,7 +582,9 @@ Train = R6::R6Class(
 			
 		}
 		
-		, run = function(
+	)
+	, public = list(
+		run = function(
 			test_mode = F
 			, batch_size = 16L
 			, discount_factor = 0.99
@@ -599,7 +618,7 @@ Train = R6::R6Class(
 				
 				private$buffer_size <- Rb$buffer_size
 				
-				private$returns_data <- data.table()
+				private$Log <- Log
 				
 				private$SAR <- c(
 					unlist(
@@ -704,11 +723,11 @@ Train = R6::R6Class(
 
 					## Make action
 					
-					q_vals <- self$act()
+					q_vals <- private$act()
 
-					private$q_val_tracker <-
+					private$Log$q_val_tracker <-
 						rbind(
-							private$q_val_tracker
+							private$Log$q_val_tracker
 							, as.data.table(t(q_vals))
 						)
 
@@ -717,11 +736,11 @@ Train = R6::R6Class(
 					
 					## Get reward
 					
-					private$R <- self$reward(fl)
+					private$R <- private$reward(fl)
 					
-					private$reward_buffer <- 
+					private$Log$reward_buffer <- 
 						c(
-							private$reward_buffer
+							private$Log$reward_buffer
 							, private$R
 						)
 					
@@ -752,7 +771,7 @@ Train = R6::R6Class(
 						nrow(private$Rb$rb) == private$buffer_size
 					   )
 						{
-						self$update_nn(
+						private$update_nn(
 							batch_size
 							, learn_rate
 							, discount_factor
@@ -762,7 +781,7 @@ Train = R6::R6Class(
 					
 					## Track dynamics
 					
-					self$dynamics(fl)
+					private$dynamics(fl)
 					
 					
 					## Update old values
@@ -777,12 +796,12 @@ Train = R6::R6Class(
 					if (
 						private$deal_count > 100 & 
 						private$iter %% print_returns_every == 0 & 
-						length(private$critic_loss_tracker) > 100 & 
+						length(private$Log$critic_loss_tracker) > 100 & 
 						nrow(private$Rb$rb) == private$buffer_size
 					)
 					{
 
-						self$stats_train()
+						private$stats_train()
 						
 					}
 					
@@ -796,7 +815,7 @@ Train = R6::R6Class(
 				
 				## Analyze results
 				
-				self$analyze()
+				private$analyze()
 				
 				
 			} else {

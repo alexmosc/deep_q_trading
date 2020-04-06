@@ -287,7 +287,7 @@ Logs <- R6::R6Class(
 			
 			print(plo)
 			
-			cat('########## training dynamics was plotted after', private$iter, 'iterations ##########', '\n')
+			cat('########## training dynamics was plotted ##########', '\n')
 			
 			invisible(self)
 			

@@ -457,7 +457,7 @@ Train = R6::R6Class(
 			## opening trade from hold -----------------------
 			
 			else if(
-				all(private$old_pos == c(0,0,0)) == T
+				all(private$old_pos == c(0,0,1)) == T
 				& all(private$A == private$old_pos) == F
 			)
 			{
@@ -744,6 +744,9 @@ Train = R6::R6Class(
 							, private$R
 						)
 					
+					
+					## Update SAR for replay buffer filling at the next step
+					
 					private$SAR <-
 						c(
 							private$S #env
@@ -771,11 +774,11 @@ Train = R6::R6Class(
 						nrow(private$Rb$rb) == private$buffer_size
 					   )
 						{
-						private$update_nn(
-							batch_size
-							, learn_rate
-							, discount_factor
-						)
+							private$update_nn(
+								batch_size
+								, learn_rate
+								, discount_factor
+							)
 					}
 					
 					

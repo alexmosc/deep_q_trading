@@ -598,46 +598,158 @@ Train = R6::R6Class(
 			
 			require(data.table)
 			require(magrittr)
+				
+			private$features <- Dat$features
 			
-			if(test_mode == F)
+			private$Rb <- Rb
+			
+			private$Nn1 <- Nn
+			
+			private$Nn2 <- Nn2
+			
+			private$feature_names <- Dat$feature_names
+			
+			private$old_pos_price <- Dat$features[1, dat]
+			
+			private$lstm_seq_length <- Nn$lstm_seq_length
+			
+			private$buffer_size <- Rb$buffer_size
+			
+			private$Log <- Log
+			
+			private$SAR <- c(
+				unlist(
+					Rb$rb[
+						.N
+						, paste0(
+							c(
+								Dat$feature_names
+								, 'buy'
+								, 'sell'
+								, 'hold'
+								, 'floating'
+							)
+							, '_next'
+						)
+						, with = F]
+				)
+				, 0,0,0,0
+			) %>%
+				magrittr::set_names(
+					c(
+						private$feature_names
+						, 'buy'
+						, 'sell'
+						, 'hold'
+						, 'floating'
+						, "act_buy" 
+						, "act_sell" 
+						, "act_hold" 
+						, "reward"
+					)
+				)
+			
+			private$iter <- private$lstm_seq_length + 1L
+			
+			if(
+				max_iter > nrow(private$features)
+			)
+			{
+				max_iter <- nrow(private$features)
+			}
+			
+			
+			## training cycle
+			
+			while(private$iter < max_iter)
 			{
 				
-				private$features <- Dat$features
+				## Make state vector
 				
-				private$Rb <- Rb
+				dt <- private$features[private$iter]
 				
-				private$Nn1 <- Nn
+				private$new_pos_price <- dt[, dat]
 				
-				private$Nn2 <- Nn2
-				
-				private$feature_names <- Dat$feature_names
-				
-				private$old_pos_price <- Dat$features[1, dat]
-				
-				private$lstm_seq_length <- Nn$lstm_seq_length
-				
-				private$buffer_size <- Rb$buffer_size
-				
-				private$Log <- Log
-				
-				private$SAR <- c(
-					unlist(
-						Rb$rb[
-							.N
-							, paste0(
-								c(
-									Dat$feature_names
-									, 'buy'
-									, 'sell'
-									, 'hold'
-									, 'floating'
-								)
-								, '_next'
-							)
-							, with = F]
+				fl <- ifelse(
+					all(private$old_pos == c(1,0,0))
+					, private$new_pos_price - private$old_pos_price - min_trans_cost
+					, ifelse(
+						all(private$old_pos == c(0,1,0))
+						, private$old_pos_price - private$new_pos_price - min_trans_cost
+						, 0
 					)
-					, 0,0,0,0
-				) %>%
+				) * magic_const
+				
+				private$S <- 
+					c(
+					unlist(dt[, private$feature_names, with = F])
+					, private$old_pos
+					, fl
+					) %>%
+					magrittr::set_names(
+						c(
+							private$feature_names
+							, 'buy'
+							, 'sell'
+							, 'hold'
+							, 'floating'
+						)
+					)
+				
+				
+				## Update replay buffer (one private$iteration lagged)
+				
+				SAR <- private$SAR
+				
+				S <- 
+					private$S %>%
+					magrittr::set_names(
+						paste0(c(
+							private$feature_names
+							, 'buy'
+							, 'sell'
+							, 'hold'
+							, 'floating'
+						)
+						, '_next'
+					)
+				)
+				
+				private$Rb$update_rb(c(SAR, S))
+				
+
+				## Make action
+				
+				q_vals <- private$act()
+
+				private$Log$q_val_tracker <-
+					rbind(
+						private$Log$q_val_tracker
+						, as.data.table(t(q_vals))
+					)
+
+				private$A <- as.integer(c(1,2,3) == which.max(q_vals))
+				
+				
+				## Get reward
+				
+				private$R <- private$reward(fl)
+				
+				private$Log$reward_buffer <- 
+					c(
+						private$Log$reward_buffer
+						, private$R
+					)
+				
+				
+				## Update SAR for replay buffer filling at the next step
+				
+				private$SAR <-
+					c(
+						private$S #env
+						, private$A #actions
+						, private$R #reward
+					) %>%
 					magrittr::set_names(
 						c(
 							private$feature_names
@@ -652,124 +764,12 @@ Train = R6::R6Class(
 						)
 					)
 				
-				private$iter <- private$lstm_seq_length + 1L
 				
-				if(
-					max_iter > nrow(private$features)
-				)
+				## Update model
+				
+				if(test_mode == F)
 				{
-					max_iter <- nrow(private$features)
-				}
 				
-				
-				## training cycle
-				
-				while(private$iter < max_iter)
-				{
-					
-					## Make state vector
-					
-					dt <- private$features[private$iter]
-					
-					private$new_pos_price <- dt[, dat]
-					
-					fl <- ifelse(
-						all(private$old_pos == c(1,0,0))
-						, private$new_pos_price - private$old_pos_price - min_trans_cost
-						, ifelse(
-							all(private$old_pos == c(0,1,0))
-							, private$old_pos_price - private$new_pos_price - min_trans_cost
-							, 0
-						)
-					) * magic_const
-					
-					private$S <- 
-						c(
-						unlist(dt[, private$feature_names, with = F])
-						, private$old_pos
-						, fl
-						) %>%
-						magrittr::set_names(
-							c(
-								private$feature_names
-								, 'buy'
-								, 'sell'
-								, 'hold'
-								, 'floating'
-							)
-						)
-					
-					
-					## Update replay buffer (one private$iteration lagged)
-					
-					SAR <- private$SAR
-					
-					S <- 
-						private$S %>%
-						magrittr::set_names(
-							paste0(c(
-								private$feature_names
-								, 'buy'
-								, 'sell'
-								, 'hold'
-								, 'floating'
-							)
-							, '_next'
-						)
-					)
-					
-					private$Rb$update_rb(c(SAR, S))
-					
-
-					## Make action
-					
-					q_vals <- private$act()
-
-					private$Log$q_val_tracker <-
-						rbind(
-							private$Log$q_val_tracker
-							, as.data.table(t(q_vals))
-						)
-
-					private$A <- as.integer(c(1,2,3) == which.max(q_vals))
-					
-					
-					## Get reward
-					
-					private$R <- private$reward(fl)
-					
-					private$Log$reward_buffer <- 
-						c(
-							private$Log$reward_buffer
-							, private$R
-						)
-					
-					
-					## Update SAR for replay buffer filling at the next step
-					
-					private$SAR <-
-						c(
-							private$S #env
-							, private$A #actions
-							, private$R #reward
-						) %>%
-						magrittr::set_names(
-							c(
-								private$feature_names
-								, 'buy'
-								, 'sell'
-								, 'hold'
-								, 'floating'
-								, "act_buy" 
-								, "act_sell" 
-								, "act_hold" 
-								, "reward"
-							)
-						)
-					
-					
-					## Update model
-					
 					if(
 						nrow(private$Rb$rb) == private$buffer_size
 					   )
@@ -781,51 +781,55 @@ Train = R6::R6Class(
 							)
 					}
 					
-					
-					## Track dynamics
-					
-					private$dynamics(fl)
-					
-					
-					## Update old values
-					
-					private$old_pos_price <- private$new_pos_price
-					
-					private$old_pos <- private$A
-					
-					
-					## Print stats
-					
-					if (
-						private$deal_count > 100 & 
-						private$iter %% print_returns_every == 0 & 
-						length(private$Log$critic_loss_tracker) > 100 & 
-						nrow(private$Rb$rb) == private$buffer_size
-					)
-					{
+				}
+				
+				
+				## Track dynamics
+				
+				private$Log$dynamics(
+					fl = fl
+					, new_pos_price = private$new_pos_price
+					, iter = private$iter
+					, old_pos = private$old_pos
+					, A = private$A
+				)
+				
+				
+				## Update old values
+				
+				private$old_pos_price <- private$new_pos_price
+				
+				private$old_pos <- private$A
+				
+				
+				## Print stats
+				
+				if (
+					private$Log$deal_count > 100 & 
+					private$iter %% print_returns_every == 0 & 
+					length(private$Log$critic_loss_tracker) > 100 & 
+					nrow(private$Rb$rb) == private$buffer_size
+				)
+				{
 
-						private$stats_train()
-						
-					}
-					
-					
-					## Update index
-					
-					private$iter <- private$iter + 1
+					private$Log$stats_train(
+						iter = private$iter
+						, features = private$features
+									    )
 					
 				}
 				
 				
-				## Analyze results
+				## Update index
 				
-				private$analyze()
-				
-				
-			} else {
-				
-				NULL
+				private$iter <- private$iter + 1
 				
 			}
+			
+			
+			## Analyze results
+			
+			private$Log$analyze()
 			
 		}
 		

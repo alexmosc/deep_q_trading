@@ -325,7 +325,115 @@ Train = R6::R6Class(
 			invisible(self)
 			
 		}
+		
+		, dynamics = function(
+			fl
+		)
+		{
+			
+			# closing buy trade -----------------------
+			
+			if(
+				all(private$old_pos == c(1,0,0)) == T
+				& all(private$A == private$old_pos) == F
+			)
+			{
+				
+				private$Log$returns_data <- rbind(
+					private$Log$returns_data,
+					data.table(
+						new_state = c('buy','sell','hold')[private$A == 1]
+						, old_state = 'buy'
+						, return = fl
+						, time_step = private$iter
+						, price = private$new_pos_price
+						, deal = 1
+					)
+				)
+				
+				private$Log$deal_count <- private$Log$deal_count + 1L
+				
+				private$old_pos_price <- private$new_pos_price
+				
+			}
+			
+			
+			## closing sell trade -----------------------
+			
+			else if(
+				all(private$old_pos == c(0,1,0)) == T
+				& all(private$A == private$old_pos) == F
+			)
+			{
+				
+				private$Log$returns_data <- rbind(
+					private$Log$returns_data,
+					data.table(
+						new_state = c('buy','sell','hold')[private$A == 1]
+						, old_state = 'sell'
+						, return = fl
+						, time_step = private$iter
+						, price = private$new_pos_price
+						, deal = 1
+					)
+				)
+				
+				private$Log$deal_count <- private$Log$deal_count + 1L
+				
+				private$old_pos_price <- private$new_pos_price
+				
+			}
+			
+			
+			## opening trade from hold -----------------------
+			
+			else if(
+				all(private$old_pos == c(0,0,1)) == T
+				& all(private$A == private$old_pos) == F
+			)
+			{
+				
+				private$Log$returns_data <- rbind(
+					private$Log$returns_data,
+					data.table(
+						new_state = c('buy','sell','hold')[private$A == 1]
+						, old_state = 'hold'
+						, return = 0
+						, time_step = private$iter
+						, price = private$new_pos_price
+						, deal = 0
+					)
+				)
+				
+				private$old_pos_price <- private$new_pos_price
+				
+			}
+			
+			
+			## continuing hold or trade -----------------------
+			
+			else 
+			{
+				
+				private$Log$returns_data <- rbind(
+					private$Log$returns_data,
+					data.table(
+						new_state = c('buy','sell','hold')[private$A == 1]
+						, old_state = c('buy','sell','hold')[private$old_pos == 1]
+						, return = 0
+						, time_step = private$iter
+						, price = private$new_pos_price
+						, deal = 0
+					)
+				)
+				
+			}
+			
+			invisible(self)
+			
+		}
 	)
+	
 	, public = list(
 		run = function(
 			test_mode = F
@@ -421,7 +529,7 @@ Train = R6::R6Class(
 						, private$old_pos_price - private$new_pos_price - min_trans_cost
 						, 0
 					)
-				) * magic_const
+				)
 				
 				private$S <- 
 					c(
@@ -529,18 +637,10 @@ Train = R6::R6Class(
 				
 				## Track dynamics
 				
-				private$Log$dynamics(
-					fl = fl
-					, new_pos_price = private$new_pos_price
-					, iter = private$iter
-					, old_pos = private$old_pos
-					, A = private$A
-				)
+				private$dynamics(fl)
 				
 				
-				## Update old values
-				
-				private$old_pos_price <- private$new_pos_price
+				## Update A
 				
 				private$old_pos <- private$A
 				

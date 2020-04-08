@@ -16,9 +16,13 @@ Logs <- R6::R6Class(
 			require(data.table)
 			
 			self$q_val_tracker <- data.table()
+			
 			self$critic_loss_tracker <- numeric()
+			
 			self$returns_data <- data.table()
-			self$reward_buffer <- numeric()
+			
+			self$reward_buffer <- numeric(Nn$lstm_seq_length - 1)
+			
 			self$deal_count <- 0
 			
 			cat('########## loggin was initialized ##########', '\n')
@@ -68,7 +72,7 @@ Logs <- R6::R6Class(
 			
 			plot(self$q_val_tracker[(nrow(self$q_val_tracker) - 100):(nrow(self$q_val_tracker) - 1), V1]
 				, type = 'l'
-				, col = 'red'
+				, col = 'green'
 				, main = 'last 100 q values'
 				, xlab = 'timestep'
 				, ylab = ''
@@ -80,12 +84,12 @@ Logs <- R6::R6Class(
 			
 			lines(self$q_val_tracker[(nrow(self$q_val_tracker) - 100):(nrow(self$q_val_tracker) - 1), V2]
 				 , type = 'l'
-				 , col = 'black'
+				 , col = 'red'
 			)
 			
 			lines(self$q_val_tracker[(nrow(self$q_val_tracker) - 100):(nrow(self$q_val_tracker) - 1), V3]
 				 , type = 'l'
-				 , col = 'green'
+				 , col = 'black'
 			)
 			
 			plot(features[(iter - 99):iter, dat]
@@ -98,111 +102,6 @@ Logs <- R6::R6Class(
 			mtext(paste0('timestep = ', iter), line=0, side=3, outer=TRUE, cex=2)
 			
 			cat('########## intermediate stats were displayed for iteration', iter, '##########', '\n')
-			
-			invisible(self)
-			
-		}
-		
-		, dynamics = function(
-			fl
-			, new_pos_price
-			, iter
-			, old_pos
-			, A
-		)
-		{
-			
-			# closing buy trade -----------------------
-			
-			if(
-				all(old_pos == c(1,0,0)) == T
-				& all(A == old_pos) == F
-			)
-			{
-				
-				self$returns_data <- rbind(
-					self$returns_data,
-					data.table(
-						new_state = c('buy','sell','hold')[A == 1]
-						, old_state = c('buy','sell','hold')[old_pos == 1]
-						, return = fl
-						, time_step = iter
-						, price = new_pos_price
-						, deal = 1
-					)
-				)
-				
-				self$deal_count <- self$deal_count + 1L
-				
-			}
-			
-			
-			## closing sell trade -----------------------
-			
-			else if(
-				all(old_pos == c(0,1,0)) == T
-				& all(A == old_pos) == F
-			)
-			{
-				
-				self$returns_data <- rbind(
-					self$returns_data,
-					data.table(
-						new_state = c('buy','sell','hold')[A == 1]
-						, old_state = c('buy','sell','hold')[old_pos == 1]
-						, return = fl
-						, time_step = iter
-						, price = new_pos_price
-						, deal = 1
-					)
-				)
-				
-				self$deal_count <- self$deal_count + 1L
-				
-			}
-			
-			
-			## opening trade from hold -----------------------
-			
-			else if(
-				all(old_pos == c(0,0,1)) == T
-				& all(A == old_pos) == F
-			)
-			{
-				
-				self$returns_data <- rbind(
-					self$returns_data,
-					data.table(
-						new_state = c('buy','sell','hold')[A == 1]
-						, old_state = c('buy','sell','hold')[old_pos == 1]
-						, return = 0
-						, time_step = iter
-						, price = new_pos_price
-						, deal = 0
-					)
-				)
-				
-			}
-			
-			
-			## continuing hold or trade -----------------------
-			
-			else 
-			{
-				
-				self$returns_data <- rbind(
-					self$returns_data,
-					data.table(
-						new_state = c('buy','sell','hold')[A == 1]
-						, old_state = c('buy','sell','hold')[old_pos == 1]
-						, return = 0
-						, time_step = iter
-						, price = new_pos_price
-						, deal = 0
-					)
-				)
-				
-			}
 			
 			invisible(self)
 			

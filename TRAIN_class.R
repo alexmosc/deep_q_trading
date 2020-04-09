@@ -20,7 +20,6 @@ Train = R6::R6Class(
 		, A = NULL
 		, R = NULL
 		, SAR = NULL
-		, iter = NULL
 		
 		, act = function()
 		{
@@ -113,6 +112,7 @@ Train = R6::R6Class(
 			batch_size
 			, learn_rate
 			, discount_factor
+			, lr_anneal
 		)
 		{
 			
@@ -276,6 +276,18 @@ Train = R6::R6Class(
 					got_rewards[i] + discount_factor * next_q_values[i, which_next_max_q[i]]
 			}
 			
+			
+			## Anneal LR
+			
+			if(
+				lr_anneal == T
+			)
+			{
+				
+				learn_rate <- learn_rate / log2(self$iter - private$buffer_size + 1)
+				
+			}
+			
 			critic_train <- keras::fit(
 				primary_nn$nn
 				, critic_train_x
@@ -345,7 +357,7 @@ Train = R6::R6Class(
 						new_state = c('buy','sell','hold')[private$A == 1]
 						, old_state = 'buy'
 						, return = fl
-						, time_step = private$iter
+						, time_step = self$iter
 						, price = private$new_pos_price
 						, deal = 1
 					)
@@ -372,7 +384,7 @@ Train = R6::R6Class(
 						new_state = c('buy','sell','hold')[private$A == 1]
 						, old_state = 'sell'
 						, return = fl
-						, time_step = private$iter
+						, time_step = self$iter
 						, price = private$new_pos_price
 						, deal = 1
 					)
@@ -399,7 +411,7 @@ Train = R6::R6Class(
 						new_state = c('buy','sell','hold')[private$A == 1]
 						, old_state = 'hold'
 						, return = 0
-						, time_step = private$iter
+						, time_step = self$iter
 						, price = private$new_pos_price
 						, deal = 0
 					)
@@ -421,7 +433,7 @@ Train = R6::R6Class(
 						new_state = c('buy','sell','hold')[private$A == 1]
 						, old_state = c('buy','sell','hold')[private$old_pos == 1]
 						, return = 0
-						, time_step = private$iter
+						, time_step = self$iter
 						, price = private$new_pos_price
 						, deal = 0
 					)
@@ -435,7 +447,10 @@ Train = R6::R6Class(
 	)
 	
 	, public = list(
-		run = function(
+		
+		iter = NULL
+		
+		, run = function(
 			test_mode = F
 			, batch_size = 16L
 			, discount_factor = 0.99
@@ -444,6 +459,7 @@ Train = R6::R6Class(
 			, min_trans_cost = 0.5
 			, print_returns_every = 100
 			, magic_const = 32
+			, lr_anneal = T
 		)
 		{
 			
@@ -500,7 +516,7 @@ Train = R6::R6Class(
 					)
 				)
 			
-			private$iter <- private$lstm_seq_length + 1L
+			self$iter <- private$lstm_seq_length + 1L
 			
 			if(
 				max_iter > nrow(private$features)
@@ -512,12 +528,12 @@ Train = R6::R6Class(
 			
 			## training cycle
 			
-			while(private$iter < max_iter)
+			while(self$iter < max_iter)
 			{
 				
 				## Make state vector
 				
-				dt <- private$features[private$iter]
+				dt <- private$features[self$iter]
 				
 				private$new_pos_price <- dt[, dat]
 				
@@ -629,6 +645,7 @@ Train = R6::R6Class(
 								batch_size
 								, learn_rate
 								, discount_factor
+								, lr_anneal
 							)
 					}
 					
@@ -649,30 +666,27 @@ Train = R6::R6Class(
 				
 				if (
 					private$Log$deal_count > 100 & 
-					private$iter %% print_returns_every == 0 & 
+					self$iter %% print_returns_every == 0 & 
 					length(private$Log$critic_loss_tracker) > 100 & 
 					nrow(private$Rb$rb) == private$buffer_size
 				)
 				{
 
-					private$Log$stats_train(
-						iter = private$iter
-						, features = private$features
-									    )
+					private$Log$stats_train()
 					
 				}
 				
 				
 				## Update index
 				
-				private$iter <- private$iter + 1
+				self$iter <- self$iter + 1
 				
 			}
 			
 			
 			## Analyze results
 			
-			private$Log$analyze()
+			private$Log$analyze(round_factor = 250)
 			
 		}
 		

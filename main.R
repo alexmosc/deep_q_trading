@@ -38,16 +38,16 @@ Dat <- Data$new()
 Dat$synthetic_signal(
 	stepsize = 0.1
 	, noise_sd = 0.1
-	, noise_sd2 = 0.0
+	, noise_sd2 = 0.1
 	, n = 50000
 	)
 
-Dat$make_features(max_lag_power = 6)
+Dat$make_features(max_lag_power = 5L)
 
 
 ## Double neural networks
 
-Nn <- NN$new(lstm_seq_length = 8L)
+Nn <- NN$new(lstm_seq_length = 3L)
 
 Nn$compile_nn(
 	loss = 'mse'
@@ -61,8 +61,8 @@ Nn2 <- Nn$clone()
 ## Replay buffer
 
 Rb <- RB$new(
-	buffer_size = 512
-	, priority_alpha = 0.1
+	buffer_size = 1024
+	, priority_alpha = 0.5
 	)
 
 Rb$init_rb()
@@ -78,14 +78,14 @@ Log <- Logs$new()
 Tr <- Train$new()
 
 Tr$run(
-	test_mode = F
-	, batch_size = 64
+	test_mode = FALSE
+	, batch_size = 4
 	, discount_factor = 0.99
-	, learn_rate = 0.001
-	, max_iter = 5000
+	, learn_rate = 0.1
+	, max_iter = 10000
 	, min_trans_cost = 0
-	, print_returns_every = 100
-	, magic_const = 1
+	, print_returns_every = 500
+	, lr_anneal = TRUE
 )
 
 

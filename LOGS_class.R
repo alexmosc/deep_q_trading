@@ -32,8 +32,8 @@ Logs <- R6::R6Class(
 		}
 		
 		, stats_train = function(
-			iter
-			, features
+			iter = Tr$iter
+			, features = Dat$features
 		)
 		{
 			
